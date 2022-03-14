@@ -9,11 +9,16 @@
 //
 package jsonl
 
+// TODO:
+// * configureable scanner bufsize, don't truncate. Add tests for length.
+// * add opts: WithGzip, WithMaxEntryLen, WithFsync, etc.
+
 import (
 	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"sync"
 	"unicode/utf8"
@@ -57,6 +62,10 @@ func Open(filename string) (*file, error) {
 		lenMu: &sync.Mutex{},
 	}, nil
 }
+
+var (
+	_ io.WriteCloser = &file{}
+)
 
 // file implements a jsonl io.WriteCloser
 type file struct {
