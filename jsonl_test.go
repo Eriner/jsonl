@@ -70,6 +70,16 @@ func TestBasicUsage(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Just for the sake of testing, we can get and test the raw bytes of
+	// the junk we wrote (simulating a power-loss event)
+	junk, err := jstore.BytesAt(jstore.Len())
+	if err != nil {
+		panic(err)
+	}
+	if json.Valid(junk) {
+		t.Fatal("this shouldn't be valid; it should be the junk we wrote above")
+	}
+
 	// Now when we try to retrieve the latest item, it's garbage!
 	latest = &Config{}
 	// But Latest() handles this for us: it returns the prior non-corrupt item.
