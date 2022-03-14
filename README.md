@@ -1,6 +1,8 @@
 # jsonl
 
-A WIP Go package to provide [`jsonl`](https://jsonlines.org/) support.
+A Go package to provide [`jsonl`](https://jsonlines.org/) support.
+
+Package is WIP and unstable.
 
 ## Usage
 
@@ -16,7 +18,9 @@ configs, err := jsonl.File("config.jsonl")
 if err != nil {
 	panic(err)
 }
-configs.Add(c)
+if err := configs.Add(c); err != nil {
+	panic(err)
+}
 
 // Retrieve it
 latest, err := configs.Latest()
@@ -25,4 +29,3 @@ if err != nil {
 }
 log.Printf("%+v", latest)
 ```
-
