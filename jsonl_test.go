@@ -9,13 +9,87 @@ import (
 	"testing"
 )
 
+func TestBasicUsage(t *testing.T) {
+	// Imagine your device is an embedded device but you
+	// want to make confiuration changes. If you, to quote a phrase,
+	// monkey-patch a JSON config, what happens if power is lost
+	// after your first change, but before your last? App logic bug.
+	// What happens if power is lost during the write of the config
+	// file itself?
+	//
+	// In these cases, the sacraficed disk storage is well worth the
+	// ability to recover from a previous value.
+	testDir, err := os.MkdirTemp("", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	filename := filepath.Join(testDir, "example.jsonl")
+
+	// Some struct or data store we want to save.
+	type Config struct {
+		Key string `json:"key"`
+	}
+
+	// Open the jsonl file, creating it if it doesn't exist.
+	jstore, err := File(filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// config is what we want to save
+	config := &Config{Key: "value"}
+	// Add config to the jsonl store
+	err = jstore.Add(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Retrieve the latest config
+	latest := &Config{}
+	err = jstore.Latest(latest)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// The values should match
+	if latest.Key != config.Key {
+		t.Fatal("values don't match!")
+	}
+
+	// But imagine there was some horrible event and there was corruption.
+	// We can simulate this by writing garbage to the underlying io.ReadWriteCloser
+	_, err = jstore.file.Write([]byte(`{ "maybe": {"this was once valid json, but it isn't anymore`))
+	if err != nil {
+		panic(err)
+	}
+
+	// Simulating a power loss event, we would have to re-open the jstore
+	_ = jstore.Close()
+	jstore, err = File(filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Now when we try to retrieve the latest item, it's garbage!
+	latest = &Config{}
+	// But Latest() handles this for us: it returns the prior non-corrupt item.
+	err = jstore.Latest(latest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if latest.Key != config.Key {
+		t.Fatal("values don't match!")
+	}
+
+}
+
 func TestJsonl(t *testing.T) {
 	testDir, err := os.MkdirTemp("", "")
 	if err != nil {
 		panic(err)
 	}
 	filename := filepath.Join(testDir, "test.jsonl")
-	j, err := Open(filename)
+	j, err := File(filename)
 	if err != nil {
 		t.Fatalf("unable to open jsonl: %s", err.Error())
 	}
@@ -54,7 +128,7 @@ func TestJsonl(t *testing.T) {
 		t.Fatalf("shouldn't error out on close: %s", err.Error())
 	}
 	j = nil
-	j, err = Open(filename)
+	j, err = File(filename)
 	if err != nil {
 		t.Fatalf("unable to re-open jsonl: %s", err.Error())
 	}
@@ -79,8 +153,8 @@ func TestJsonl(t *testing.T) {
 		t.Fatalf("error writing marshaled json shruct")
 	}
 	SomeStruct.A.Key = "xxxxxxxxxxxx"
-	if err := j.Last(&SomeStruct); err != nil {
-		t.Fatalf("error getting Last jsonl entry: %s", err.Error())
+	if err := j.Latest(&SomeStruct); err != nil {
+		t.Fatalf("error getting Latest jsonl entry: %s", err.Error())
 	}
 	dat2, _ := json.Marshal(SomeStruct)
 	if !bytes.Equal(dat, dat2) {
