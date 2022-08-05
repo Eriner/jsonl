@@ -2,8 +2,6 @@ package jsonl
 
 import (
 	"encoding/json"
-	"os"
-	"path/filepath"
 	"testing"
 )
 
@@ -52,33 +50,6 @@ func Example_main() {
 	if latest.Key != config.Key {
 		panic(err)
 	}
-
-	// But imagine there was some horrible event and there was corruption in the middle of a write.
-	// We can simulate this by writing garbage to the underlying io.ReadWriteCloser
-	_, err = store.f.Write([]byte(`{ "maybe": {"this was once valid json, but it isn't anymore`))
-	if err != nil {
-		panic(err)
-	}
-
-	// Simulating a power loss event, we would have to re-open the jstore
-	_ = store.Close()
-	store, err = OpenFile(filename)
-	if err != nil {
-		panic(err)
-	}
-	reader = json.NewDecoder(store)
-
-	// Now when we try to retrieve the latest item, it'll be garbage!
-	// But the jsonl Read() method handles this for us: it returns the
-	// last non-corrupt item, which should be the first write we performed
-	// above.
-	latest = Config{}
-	if err := reader.Decode(&latest); err != nil {
-		panic(err)
-	}
-	if latest.Key != config.Key {
-		panic(err)
-	}
 }
 
 func TestWriteFailure(t *testing.T) {
@@ -91,11 +62,14 @@ func TestWriteFailure(t *testing.T) {
 	//
 	// In these cases, the sacraficed disk storage is well worth the
 	// ability to recover from a previous value.
-	testDir, err := os.MkdirTemp("", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	filename := filepath.Join(testDir, "example.jsonl")
+	/*
+		testDir, err := os.MkdirTemp("", "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		filename := filepath.Join(testDir, "example.jsonl")
+	*/
+	filename := "test.jsonl"
 
 	// Some struct or data store we want to save.
 	type Config struct {
@@ -133,14 +107,17 @@ func TestWriteFailure(t *testing.T) {
 	}
 
 	// But imagine there was some horrible event and there was corruption in the middle of a write.
-	// We can simulate this by writing garbage to the underlying io.ReadWriteCloser
+	// We can simulate this by writing garbage to the underlying os.File:
 	_, err = store.f.Write([]byte(`{ "maybe": {"this was once valid json, but it isn't anymore`))
 	if err != nil {
 		panic(err)
 	}
+	if err := store.f.Sync(); err != nil {
+		panic(err)
+	}
 
 	// Simulating a power loss event, we would have to re-open the jstore
-	_ = store.Close()
+	//_ = store.Close()
 	store = nil
 
 	store, err = OpenFile(filename)
