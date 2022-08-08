@@ -23,6 +23,7 @@ import (
 	"unicode/utf8"
 )
 
+const entrySizeCap int64 = 1024 * 1024 * 16 // 16M
 // ErrNotJSON is returned if the argument passed to Write() was
 // not valid JSON.
 var ErrNotJSON = fmt.Errorf("argument to Write() was not valid JSON")
@@ -82,6 +83,7 @@ func (j *Jsonl) Encode(v any) error {
 
 // Read the latest non-corrupt jsonl entry into p.
 func (j *Jsonl) Read(p []byte) (int, error) {
+	const chunkSize int64 = 4096 // 4K
 	if j.f == nil {
 		return 0, os.ErrNotExist
 	}
@@ -89,28 +91,45 @@ func (j *Jsonl) Read(p []byte) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	buf := make([]byte, stat.Size())
-	n, err := j.f.ReadAt(buf, 0)
-	if err != nil {
-		if !errors.Is(err, io.EOF) {
-			return 0, fmt.Errorf("jsonl failed reading the underlying file: %w", err)
-		}
-	}
-	if n == 0 {
-		return 0, nil
-	}
+	buf := make([]byte, chunkSize, entrySizeCap)
+	// than this, you should probably be using a database.
 	start := -1
 	end := -1
-	for i := len(buf) - 1; i >= 0; i-- {
-		if buf[i] == '\n' {
-			end = start
-			start = i
+	for off := stat.Size() / chunkSize; off >= 0; off = off - chunkSize {
+		n, err := j.f.ReadAt(buf, off*chunkSize)
+		if err != nil {
+			if !errors.Is(err, io.EOF) {
+				return 0, fmt.Errorf("jsonl failed reading the underlying file: %w", err)
+			}
 		}
+		if n == 0 {
+			return 0, nil
+		}
+		// Regardless of what chunk we're processing, we read backwards over the
+		// whole buf. While this is somewhat inefficient, in-memory manipulations
+		// are fast.
+		for i := len(buf) - 1; i >= 0; i-- {
+			if buf[i] == '\n' {
+				end = start
+				start = i
+			}
+			if end > 0 {
+				break
+			}
+		}
+		if end > 0 {
+			break
+		}
+		buf = buf[:n] // will over-allocate in some circumstances, but that's fine.
 	}
 	// Handle the first entry not having a newline
 	if end < 0 && start > -1 {
-		end = start
-		start = 0
+		if stat.Size()/chunkSize == 0 {
+			end = start
+			start = 0
+		} else {
+			return 0, fmt.Errorf("jsonl: entry exceeded 16M size limit")
+		}
 	}
 	if end < 0 || start < 0 {
 		return 0, io.EOF
@@ -120,6 +139,9 @@ func (j *Jsonl) Read(p []byte) (int, error) {
 
 // Write the JSON byte slice p to the jsonl file.
 func (j *Jsonl) Write(p []byte) (n int, err error) {
+	if int64(len(p)) > entrySizeCap {
+		return 0, fmt.Errorf("jsonl: data passed to write exceeds the 16M entry size limit")
+	}
 	// TODO: This function is messy and makes a lot of unnecessary allocations.
 	// My use-cases aren't performance intensive, so this is fine. Ideally I
 	// would write benchmarks and optimize.

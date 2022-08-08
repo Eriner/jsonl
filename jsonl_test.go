@@ -2,6 +2,8 @@ package jsonl
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -52,7 +54,7 @@ func Example_main() {
 	}
 }
 
-func TestWriteFailure(t *testing.T) {
+func TestMidWriteFailure(t *testing.T) {
 	// Imagine your device is an embedded device but you
 	// want to make confiuration changes. If you, to quote a phrase,
 	// monkey-patch a JSON config, what happens if power is lost
@@ -62,14 +64,11 @@ func TestWriteFailure(t *testing.T) {
 	//
 	// In these cases, the sacraficed disk storage is well worth the
 	// ability to recover from a previous value.
-	/*
-		testDir, err := os.MkdirTemp("", "")
-		if err != nil {
-			t.Fatal(err)
-		}
-		filename := filepath.Join(testDir, "example.jsonl")
-	*/
-	filename := "test.jsonl"
+	testDir, err := os.MkdirTemp("", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	filename := filepath.Join(testDir, "test_failure.jsonl")
 
 	// Some struct or data store we want to save.
 	type Config struct {
@@ -136,5 +135,36 @@ func TestWriteFailure(t *testing.T) {
 	}
 	if latest.Key != config.Key {
 		t.Fatal("values don't match!")
+	}
+}
+
+func TestExpectedRead(t *testing.T) {
+	testDir, err := os.MkdirTemp("", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	filename := filepath.Join(testDir, "validity.jsonl")
+	type Entry struct {
+		V int `json:"number"`
+	}
+	store, err := OpenFile(filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	reader := json.NewDecoder(store)
+	writer := json.NewEncoder(store)
+
+	for i := 0; i <= 12; i++ {
+		if err := writer.Encode(&Entry{V: i}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	latest := &Entry{}
+	if err := reader.Decode(latest); err != nil {
+		t.Fatal(err)
+	}
+	if latest.V != 12 {
+		t.Fatalf("got wrong entry when performing reader.Decode(). Expected (%d), got (%d)\n", 12, latest.V)
 	}
 }
