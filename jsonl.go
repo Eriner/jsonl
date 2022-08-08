@@ -75,6 +75,14 @@ func (j *Jsonl) Decode(v interface{}) error {
 	if j.f == nil {
 		return os.ErrNotExist
 	}
+	stat, err := j.f.Stat()
+	if err != nil {
+		return err
+	}
+	if stat.Size() == 0 {
+		// Empty file, nothing to decode.
+		return nil
+	}
 	dec := json.NewDecoder(j)
 	return dec.Decode(v)
 }

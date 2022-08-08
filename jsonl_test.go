@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func Example_main() {
@@ -166,5 +167,34 @@ func TestExpectedRead(t *testing.T) {
 	}
 	if latest.V != 12 {
 		t.Fatalf("got wrong entry when performing reader.Decode(). Expected (%d), got (%d)\n", 12, latest.V)
+	}
+}
+
+func TestEmptyDecode(t *testing.T) {
+	testDir, err := os.MkdirTemp("", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	filename := filepath.Join(testDir, "empty.jsonl")
+	type Entry struct {
+		V int `json:"number"`
+	}
+	store, err := OpenFile(filename)
+	defer store.Close()
+
+	ch := make(chan struct{})
+	go func() {
+		null := &Entry{}
+		if err := store.Decode(null); err != nil {
+			t.Fatal(err)
+		}
+		ch <- struct{}{}
+	}()
+
+	select {
+	case <-time.After(1 * time.Second):
+		t.Fatal("failed to return error from Read() on empty file")
+	case <-ch:
+
 	}
 }
