@@ -72,11 +72,17 @@ func (j *Jsonl) Close() error {
 }
 
 func (j *Jsonl) Decode(v interface{}) error {
+	if j.f == nil {
+		return os.ErrNotExist
+	}
 	dec := json.NewDecoder(j)
 	return dec.Decode(v)
 }
 
 func (j *Jsonl) Encode(v interface{}) error {
+	if j.f == nil {
+		return os.ErrNotExist
+	}
 	enc := json.NewEncoder(j)
 	return enc.Encode(v)
 }
@@ -139,6 +145,9 @@ func (j *Jsonl) Read(p []byte) (int, error) {
 
 // Write the JSON byte slice p to the jsonl file.
 func (j *Jsonl) Write(p []byte) (n int, err error) {
+	if j.f == nil {
+		return 0, os.ErrNotExist
+	}
 	if int64(len(p)) > entrySizeCap {
 		return 0, fmt.Errorf("jsonl: data passed to write exceeds the 16M entry size limit")
 	}
