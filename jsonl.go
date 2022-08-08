@@ -71,12 +71,12 @@ func (j *Jsonl) Close() error {
 	return j.f.Close()
 }
 
-func (j *Jsonl) Decode(v any) error {
+func (j *Jsonl) Decode(v interface{}) error {
 	dec := json.NewDecoder(j)
 	return dec.Decode(v)
 }
 
-func (j *Jsonl) Encode(v any) error {
+func (j *Jsonl) Encode(v interface{}) error {
 	enc := json.NewEncoder(j)
 	return enc.Encode(v)
 }
